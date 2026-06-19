@@ -66,6 +66,30 @@
     pointer-events: none; white-space: nowrap; box-shadow: 0 2px 8px rgba(0,0,0,0.08);
   }
   #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .back-link {
+    margin-top: 28px;
+    padding-top: 16px;
+    border-top: 0.5px solid #ddd;
+  }
+  .back-link a {
+    font-size: 13px; color: #888; text-decoration: none;
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 8px 14px 8px 8px;
+    border: 0.5px solid #e0e0e0;
+    border-radius: 20px;
+    background: #fff;
+    transition: border-color 0.15s, color 0.15s, box-shadow 0.15s;
+  }
+  .back-link a:hover {
+    color: #4fa8d8;
+    border-color: #a8d8f0;
+    box-shadow: 0 2px 8px rgba(79,168,216,0.12);
+  }
+  .back-link img {
+    width: 26px; height: 26px; border-radius: 50%;
+    object-fit: cover; border: 1.5px solid #cce8f8;
+    flex-shrink: 0;
+  }
 </style>
 </head>
 <body>
@@ -85,6 +109,14 @@
 <div id="grid"></div>
 <div id="toast"></div>
 
+<div class="back-link">
+  <a href="https://snorvpc.github.io/snorport/">
+    <img src="https://snorvpc.github.io/snorport/icon.jpg" alt="snor">
+    snor's tools
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+  </a>
+</div>
+
 <script>
 const defaultTiers = {
   s: [10,17,18,20,23,35,38,46,49,60,63,64,67],
@@ -101,7 +133,6 @@ function tierText(t)  { return {s:'#7a1a1a',a:'#7a3a00',b:'#6b5200',c:'#3a5a00',
 const tileMap = {};
 Object.entries(defaultTiers).forEach(([tier, nums]) => nums.forEach(n => tileMap[n] = tier));
 const allNums = Object.keys(tileMap).map(Number).sort((a,b) => a-b);
-// state: 0=off, 1=mine, 2=enemy
 const state = {};
 allNums.forEach(n => state[n] = { val: 0, tier: tileMap[n] });
 
