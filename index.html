@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Faraway タイルトラッカー</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: system-ui, sans-serif; background: #f5f5f3; color: #1a1a1a; padding: 16px; }
+  h1 { font-size: 16px; font-weight: 500; color: #555; margin-bottom: 12px; }
+  .top-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; flex-wrap: wrap; gap: 8px; }
+  .summary { display: flex; flex-wrap: wrap; gap: 8px; }
+  .summary-item {
+    display: flex; align-items: center; gap: 8px;
+    background: #fff; border: 0.5px solid #ddd;
+    border-radius: 8px; padding: 6px 12px; font-size: 13px;
+  }
+  .summary-count { color: #888; }
+  .summary-count span { color: #1a1a1a; font-weight: 500; }
+  .reset-btn {
+    padding: 6px 16px; font-size: 13px; border-radius: 8px;
+    border: 0.5px solid #ccc; background: #fff;
+    color: #666; cursor: pointer;
+  }
+  .reset-btn:hover { background: #f0f0f0; color: #1a1a1a; }
+  .legend { display: flex; gap: 16px; margin-bottom: 12px; font-size: 12px; color: #888; flex-wrap: wrap; }
+  .legend-item { display: flex; align-items: center; gap: 6px; }
+  .legend-box { width: 16px; height: 16px; border-radius: 4px; border: 1.5px solid transparent; }
+  .hint { font-size: 12px; color: #aaa; margin-bottom: 12px; }
+  .decade { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+  .decade-label { font-size: 11px; color: #bbb; width: 28px; text-align: right; flex-shrink: 0; }
+  .decade-tiles { display: flex; flex-wrap: wrap; gap: 6px; }
+  .tile {
+    width: 44px; height: 44px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 8px; font-size: 13px; font-weight: 500;
+    cursor: pointer; user-select: none;
+    border: 2px solid transparent; position: relative;
+    transition: transform 0.1s;
+  }
+  .tile:active { transform: scale(0.93); }
+  .tile.off { background: #ebebeb; color: #aaa; border-color: #ddd; }
+  .tile.mine { background: #f87171; color: #7a1a1a; border-color: #dc2626; }
+  .tile.enemy { background: #60a5fa; color: #0a2a5a; border-color: #2563eb; }
+  .tile.both { background: linear-gradient(135deg, #f87171 50%, #60a5fa 50%); color: #1a1a3a; border-color: #888; }
+  .tier-badge {
+    position: absolute; top: -5px; right: -5px;
+    font-size: 9px; font-weight: 700;
+    width: 14px; height: 14px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+  }
+  #toast {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(10px);
+    background: #fff; border: 0.5px solid #ccc; color: #666;
+    font-size: 12px; padding: 6px 14px; border-radius: 8px;
+    opacity: 0; transition: opacity 0.2s, transform 0.2s;
+    pointer-events: none; white-space: nowrap; box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+<h1>Faraway タイルトラッカー</h1>
+<div class="top-row">
+  <div class="summary" id="summary"></div>
+  <button class="reset-btn" id="resetBtn">リセット</button>
+</div>
+<div class="legend">
+  <div class="legend-item"><div class="legend-box" style="background:#f87171;border-color:#dc2626"></div>自分</div>
+  <div class="legend-item"><div class="legend-box" style="background:#60a5fa;border-color:#2563eb"></div>相手</div>
+  <div class="legend-item"><div class="legend-box" style="background:linear-gradient(135deg,#f87171 50%,#60a5fa 50%);border-color:#888"></div>両方</div>
+</div>
+<p class="hint">左クリック：自分が入手　右クリック：相手が入手　（各8枚まで）</p>
+<div id="grid"></div>
+<div id="toast"></div>
+
+<script>
+const tiers = {
+  s: [10,17,18,20,23,35,38,46,49,60,63,64,67],
+  a: [15,22,32,33,37,39,40,41,51,54,55,69,71,74,76],
+  b: [0,14,16,19,24,28,29,30,34,43,48,58,66],
+  c: [1,2,3,4,5,6,7,8,9,11,12,13,21,26,59],
+  d: [25,27,31,36,42,44,45,47,50,52,53,56,57,61,62,65,68,70,72,73,75]
+};
+const tileMap = {};
+Object.entries(tiers).forEach(([tier, nums]) => nums.forEach(n => tileMap[n] = tier));
+const allNums = Object.keys(tileMap).map(Number).sort((a,b) => a-b);
+const state = {};
+allNums.forEach(n => state[n] = { mine: false, enemy: false });
+const tierLabels = { s:'S', a:'A', b:'B', c:'C', d:'D' };
+function tierColor(t) { return {s:'#ff8080',a:'#ffb966',b:'#ffdd66',c:'#d4f270',d:'#b8f0a0'}[t]; }
+function tierText(t)  { return {s:'#7a1a1a',a:'#7a3a00',b:'#6b5200',c:'#3a5a00',d:'#1a4a00'}[t]; }
+function getClass(n) {
+  const { mine, enemy } = state[n];
+  if (mine && enemy) return 'tile both';
+  if (mine) return 'tile mine';
+  if (enemy) return 'tile enemy';
+  return 'tile off';
+}
+function countFor(who) { return Object.values(state).filter(s => s[who]).length; }
+
+let toastTimer = null;
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+function updateSummary() {
+  document.getElementById('summary').innerHTML = Object.entries(tiers).map(([tier, nums]) => {
+    const taken = nums.filter(n => state[n].mine || state[n].enemy).length;
+    return `<div class="summary-item">
+      <span style="background:${tierColor(tier)};color:${tierText(tier)};font-weight:500;padding:1px 6px;border-radius:4px;">${tierLabels[tier]}</span>
+      <span class="summary-count"><span>${taken}</span> / ${nums.length}</span>
+    </div>`;
+  }).join('');
+}
+
+const elMap = {};
+const grid = document.getElementById('grid');
+
+const maxNum = Math.max(...allNums);
+const decades = [];
+for (let d = 0; d <= Math.floor(maxNum / 10); d++) decades.push(d);
+
+decades.forEach(d => {
+  const nums = allNums.filter(n => Math.floor(n / 10) === d);
+  if (nums.length === 0) return;
+
+  const row = document.createElement('div');
+  row.className = 'decade';
+
+  const label = document.createElement('div');
+  label.className = 'decade-label';
+  label.textContent = d * 10;
+  row.appendChild(label);
+
+  const tilesDiv = document.createElement('div');
+  tilesDiv.className = 'decade-tiles';
+
+  nums.forEach(n => {
+    const tier = tileMap[n];
+    const el = document.createElement('div');
+    el.className = 'tile off';
+    el.innerHTML = `${n}<span class="tier-badge" style="background:${tierColor(tier)};color:${tierText(tier)}">${tierLabels[tier]}</span>`;
+    el.addEventListener('click', () => {
+      const next = !state[n].mine;
+      if (next && countFor('mine') >= 8) { showToast('自分の取得は8枚までです'); return; }
+      state[n].mine = next;
+      el.className = getClass(n);
+      updateSummary();
+    });
+    el.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      const next = !state[n].enemy;
+      if (next && countFor('enemy') >= 8) { showToast('相手の取得は8枚までです'); return; }
+      state[n].enemy = next;
+      el.className = getClass(n);
+      updateSummary();
+    });
+    elMap[n] = el;
+    tilesDiv.appendChild(el);
+  });
+
+  row.appendChild(tilesDiv);
+  grid.appendChild(row);
+});
+
+document.getElementById('resetBtn').addEventListener('click', () => {
+  allNums.forEach(n => { state[n] = { mine: false, enemy: false }; elMap[n].className = 'tile off'; });
+  updateSummary();
+});
+updateSummary();
+</script>
+</body>
+</html>
