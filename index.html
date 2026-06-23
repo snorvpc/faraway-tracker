@@ -63,6 +63,13 @@
   .tile.mine  { background: #f87171; color: #7a1a1a; border-color: #dc2626; }
   .tile.enemy { background: #60a5fa; color: #0a2a5a; border-color: #2563eb; }
   .tile.hold  { background: #c8c8c8; color: #555; border-color: #999; border-style: dashed; }
+  .tile.discard { background: #c8c8c8; color: #555; border-color: #999; border-style: dashed; }
+  .tile.discard::after {
+    content: ''; position: absolute;
+    top: 50%; left: 8%; width: 84%; height: 2px;
+    background: #666; transform: rotate(-20deg);
+    border-radius: 1px; pointer-events: none;
+  }
   .tier-badge {
     position: absolute; top: -5px; right: -5px;
     font-size: 9px; font-weight: 700;
@@ -100,6 +107,7 @@
   <div class="legend-item"><div class="legend-box" style="background:#f87171;border-color:#dc2626"></div>自分</div>
   <div class="legend-item"><div class="legend-box" style="background:#60a5fa;border-color:#2563eb"></div>相手</div>
   <div class="legend-item"><div class="legend-box" style="background:#c8c8c8;border:1.5px dashed #999"></div>ホールド</div>
+  <div class="legend-item"><div class="legend-box" style="background:#c8c8c8;border:1.5px dashed #999;position:relative;overflow:hidden"><div style="position:absolute;top:50%;left:5%;width:90%;height:2px;background:#666;transform:rotate(-20deg)"></div></div>廃棄</div>
   <div class="legend-item"><div class="legend-box" style="background:#e8e8e8;border:2px solid #ff8080"></div>S/A未取得</div>
 </div>
 <p class="hint" id="hint">1回タップ：自分　2回タップ：相手　3回タップ：リセット（各8枚まで）</p>
@@ -153,7 +161,7 @@ if (savedTierData) document.getElementById('saveStatus').textContent = '保存�
 let holdMode = false;
 
 function getBaseClass(n) {
-  return ['tile off', 'tile mine', 'tile enemy', 'tile hold'][state[n].val];
+  return ['tile off', 'tile mine', 'tile enemy', 'tile hold', 'tile discard'][state[n].val];
 }
 function getTileClass(n) {
   const base = getBaseClass(n);
@@ -261,11 +269,14 @@ for (let d = 0; d <= Math.floor(maxNum / 10); d++) {
     el.addEventListener('click', () => {
       if (holdMode) {
         if (state[n].val === 1 || state[n].val === 2) return;
-        state[n].val = state[n].val === 3 ? 0 : 3;
+        if (state[n].val === 0) state[n].val = 3;        // off → hold
+        else if (state[n].val === 3) state[n].val = 4;   // hold → discard
+        else if (state[n].val === 4) state[n].val = 0;   // discard → off
         el.className = getTileClass(n);
         updateDecadeBadges();
         return;
       }
+      if (state[n].val === 4) return; // 廃棄済みは変更不可
       const cur = state[n].val === 3 ? 0 : state[n].val;
       const next = (cur + 1) % 3;
       if (next === 1 && countVal(1) >= 8) { showToast('自分の取得は8枚までです'); return; }
@@ -305,7 +316,7 @@ holdBtn.addEventListener('click', () => {
   holdMode = !holdMode;
   holdBtn.classList.toggle('active-hold', holdMode);
   document.getElementById('hint').textContent = holdMode
-    ? 'ホールドモード：タップで仮押さえ（グレー）のオン／オフ'
+    ? 'ホールドモード：1回→ホールド　2回→廃棄　3回→リセット'
     : '1回タップ：自分　2回タップ：相手　3回タップ：リセット（各8枚まで）';
 });
 
